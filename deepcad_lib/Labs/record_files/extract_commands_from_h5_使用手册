@@ -1,0 +1,25 @@
+
+默认行为（输出干净的整数）
+运行方式和之前一样，不加新的开关。
+
+# 打印干净的整数
+python extract_commands_from_h5.py --file ./reconstructions/test_reconstructed.h5
+
+# 保存为txt，内容也是干净的整数
+python extract_commands_from_h5.py --file ./reconstructions/test_reconstructed.h5 --output-mode save
+
+预期输出/文件内容:
+Generated code
+...
+05:   | Ext        | [192, 64, 192, 32, 128, 32, 192, 32, 128, 1, 0]
+...
+Use code with caution.
+
+可选行为（输出带 np.int64 的原始类型）
+如果你需要看到原始的 NumPy 类型（例如为了调试），只需在命令行中添加 --raw-numpy-types 标志。
+
+# 打印带 np.int64 的原始类型
+python extract_commands_from_h5.py --file ./reconstructions/test_reconstructed.h5 --raw-numpy-types
+
+# 保存为txt，内容也是带 np.int64 的原始类型
+python extract_commands_from_h5.py --file ./reconstructions/test_reconstructed.h5 --output-mode save --raw-numpy-types

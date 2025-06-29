@@ -1,0 +1,57 @@
+python ply_to_cad_sequence.py \
+    --ply_file /path/to/your/pointcloud.ply \
+    --pc_model_path ./latest.pth \
+    --proj_dir ./proj_log \
+    --ae_exp_name your_deepcad_experiment_name \
+    --ae_ckpt latest \
+    --gpu_ids 0
+    
+
+// 1. 点云到命令序列
+python ply_to_cad_sequence.py \
+    --ply_file ./Labs/PlyFiles/test.ply \
+    --pc_model_path ./Point++/latest.pth \
+    --proj_dir ./proj_log \
+    --ae_exp_name pretrained \
+    --ae_ckpt 1000 \
+    --gpu_ids 0 \
+    --output_dir ./Labs/reconstructions
+    
+    
+// 2.可视化(失败)
+cd utils
+python show.py --src ./reconstructions --form h5
+
+// 可视化缺少OCC
+conda install -c conda-forge pythonocc-core
+
+
+// 3.导出命令序列
+
+# 默认行为（输出干净的整数）
+# 运行方式和之前一样，不加新的开关。
+
+# 打印干净的整数
+python extract_commands_from_h5.py --file ./Labs/reconstructions/test_reconstructed.h5
+
+# 保存为txt，内容也是干净的整数
+python extract_commands_from_h5.py --file ./Labs/reconstructions/test_reconstructed.h5 --output-mode save
+
+预期输出/文件内容:
+Generated code
+...
+05:   | Ext        | [192, 64, 192, 32, 128, 32, 192, 32, 128, 1, 0]
+...
+Use code with caution.
+
+可选行为（输出带 np.int64 的原始类型）
+如果你需要看到原始的 NumPy 类型（例如为了调试），只需在命令行中添加 --raw-numpy-types 标志。
+
+# 打印带 np.int64 的原始类型
+python extract_commands_from_h5.py --file ./Labs/reconstructions/test_reconstructed.h5 --raw-numpy-types
+
+# 保存为txt，内容也是带 np.int64 的原始类型
+python extract_commands_from_h5.py --file ./Labs/reconstructions/test_reconstructed.h5 --output-mode save --raw-numpy-types
+
+
+

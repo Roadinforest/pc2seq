@@ -1,0 +1,14 @@
+// 用json格式读取原本的CAD构建序列
+python show.py --src ../data/cad_json/0000 --form json 
+
+// 用h5格式展示含有out_vec的预测效果
+python show.py --src ../proj_log/pretrained/results/test_1000/ --num 10
+
+// 展示随机生成效果
+python show.py --src ../proj_log/DeepCAD_500/lgan_500/results/fake_z_ckpt200000_num9000_dec
+
+// 使用export2step导出为step文件
+python export2step.py --src ../proj_log/pretrained/results/test_1000/ --num 3
+
+// 可视化缺少OCC
+conda install -c conda-forge pythonocc-core
