@@ -17,9 +17,23 @@ Including another URLconf
 # backend/urls.py
 from django.contrib import admin
 from django.urls import path, include # 确保导入了 include
+from django.conf import settings
+from django.conf.urls.static import static
+from inference_api.views import upload_ply_view, process_ply_view
+
+
+# urlpatterns = [
+#     path('admin/', admin.site.urls),
+#     # 将所有 /api/ 开头的请求，都转发到 inference_api.urls 文件去处理
+#     path('api/', include('inference_api.urls')),
+# ]
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # 将所有 /api/ 开头的请求，都转发到 inference_api.urls 文件去处理
-    path('api/', include('inference_api.urls')),
+    path('api/upload/', upload_ply_view, name='upload_ply'),
+    path('api/process-ply/', process_ply_view, name='process_ply'),
 ]
+
+# (新增) 在开发模式下，让 Django 处理媒体文件的访问
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -51,27 +51,67 @@ def stream_inference_response(ply_filename):
     """生成器函数..."""
     # ... (心跳和锁) ...
     try:
-        PROJECT_ROOT = settings.BASE_DIR.parent
-        ply_filepath = os.path.join(PROJECT_ROOT, 'media', 'uploads', ply_filename)
-        pc_model_path = os.path.join(PROJECT_ROOT, 'pc2seq/deepcad_lib/Point++', 'latest.pth')
-        proj_dir = os.path.join(PROJECT_ROOT, 'pc2seq/deepcad_lib/proj_log')
+        # PROJECT_ROOT = settings.BASE_DIR.parent
+        # ply_filepath = os.path.join(PROJECT_ROOT, 'media', 'uploads', ply_filename)
+        # pc_model_path = os.path.join(PROJECT_ROOT, 'pc2seq/deepcad_lib/Point++', 'latest.pth')
+        # proj_dir = os.path.join(PROJECT_ROOT, 'pc2seq/deepcad_lib/proj_log')
+        #
+        # # --- 关键修改：设置子进程的工作目录 ---
+        # # 我们让子进程在 'backend' 目录下运行
+        # backend_dir = str(settings.BASE_DIR)
+        #
+        # # ml_script_path 现在可以是相对于 cwd 的路径
+        # ml_script_name = 'run_inference.py'
+        # ml_script_path = os.path.join('ml_scripts', ml_script_name)
+        #
+        # python_executable = sys.executable
+        #
+        # command = [
+        #     python_executable, '-u', ml_script_path,
+        #     '--ply_file', ply_filepath,
+        #     '--output_dir', os.path.join(PROJECT_ROOT, 'media', 'results'),
+        #     '--pc_model_path', pc_model_path,
+        #     '--proj_dir', proj_dir,
+        #     '--ae_exp_name', 'pretrained',
+        #     '--ae_ckpt', '1000',
+        # ]
 
-        # --- 关键修改：设置子进程的工作目录 ---
-        # 我们让子进程在 'backend' 目录下运行
-        backend_dir = str(settings.BASE_DIR)
+        # --- 新的、更可靠的路径处理 ---
+        project_dir = settings.BASE_DIR
 
-        # ml_script_path 现在可以是相对于 cwd 的路径
-        ml_script_name = 'run_inference.py'
-        ml_script_path = os.path.join('ml_scripts', ml_script_name)
+        # Django主进程拥有正确的路径信息，我们在这里创建目录
+        output_dir_abs = os.path.join(settings.MEDIA_ROOT, 'results')
+        os.makedirs(output_dir_abs, exist_ok=True)  # <-- 主进程负责创建目录
+
+        # 获取其他绝对路径
+        ply_filepath_abs = os.path.join(settings.MEDIA_ROOT, 'uploads', ply_filename)
+        pc_model_path_abs = os.path.join(project_dir, 'deepcad_lib', 'Point++', 'latest.pth')
+        proj_dir_abs = os.path.join(project_dir, 'deepcad_lib', 'proj_log')
+
+        # --- 传递给子进程的路径 ---
+        # 因为我们设置了 cwd=project_dir，所以传递相对于 project_dir 的路径更简单
+        # 使用 os.path.relpath 来计算相对路径
+        output_dir_rel = os.path.relpath(output_dir_abs, project_dir)  # e.g., ../media/results
+        ply_filepath_rel = os.path.relpath(ply_filepath_abs, project_dir)
+        pc_model_path_rel = os.path.relpath(pc_model_path_abs, project_dir)
+        proj_dir_rel = os.path.relpath(proj_dir_abs, project_dir)
+
+        # 打印诊断信息，在 Django 终端查看
+        print("--- RUNNING SUBPROCESS WITH ---")
+        print(f"CWD: {project_dir}")
+        print(f"Output Dir (rel): {output_dir_rel}")
+        print(f"PLY File (rel): {ply_filepath_rel}")
+        print("-------------------------------")
 
         python_executable = sys.executable
+        ml_script_path = os.path.join('ml_scripts', 'run_inference.py')
 
         command = [
             python_executable, '-u', ml_script_path,
-            '--ply_file', ply_filepath,
-            '--output_dir', os.path.join(PROJECT_ROOT, 'media', 'results'),
-            '--pc_model_path', pc_model_path,
-            '--proj_dir', proj_dir,
+            '--output_dir', output_dir_rel,  # <--- 传递相对路径
+            '--ply_file', ply_filepath_rel,
+            '--pc_model_path', pc_model_path_rel,
+            '--proj_dir', proj_dir_rel,
             '--ae_exp_name', 'pretrained',
             '--ae_ckpt', '1000',
         ]
@@ -84,7 +124,7 @@ def stream_inference_response(ply_filename):
             text=True,
             bufsize=1,
             encoding='utf-8',
-            cwd=backend_dir  # <-- 设置子进程的工作目录为 backend/
+            cwd=project_dir  # <-- 设置子进程的工作目录为 backend/
         )
 
         for line in iter(process.stdout.readline, ''):

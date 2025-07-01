@@ -19,14 +19,12 @@
 
       <div class="content-wrapper">
         <div class="viewer-container">
-          <h3>3D Point Cloud Viewer</h3>
-          <div ref="container" class="viewer">
-            <p v-if="!file" class="viewer-placeholder">Select a file to view the point cloud</p>
-          </div>
+          <h3>1. Input Point Cloud</h3>
+          <div ref="container" class="viewer" />
         </div>
 
         <div class="results-container">
-          <h3>Inference Progress & Results</h3>
+          <h3>2. Inference & Result</h3>
           <div class="progress-box">
             <p v-if="progressUpdates.length === 0" class="placeholder">
               Progress will be shown here...
@@ -38,16 +36,33 @@
               </li>
             </ul>
           </div>
-          <div class="sequence-box">
-            <pre v-if="finalSequence">{{ finalSequence }}</pre>
-            <p v-if="!finalSequence" class="placeholder">
-              Generated CAD sequence will appear here...
-            </p>
+          <div class="result-viewer-box">
+            <!-- (功能点二) STEP Viewer -->
+            <StepViewer v-if="stepFileUrl" :file-url="`${SERVER_ROOT_URL}${stepFileUrl}`" />
+
+            <!-- (功能点三) 转换失败提示 -->
+            <div v-if="inferenceError" class="result-placeholder error">
+              <h4>Conversion Failed</h4>
+              <pre>{{ inferenceError }}</pre>
+            </div>
+
+            <!-- 默认提示 -->
+            <div v-if="!stepFileUrl && !inferenceError && !isProcessing" class="result-placeholder">
+              Generated CAD model will appear here...
+            </div>
+
+            <!-- 下载按钮 -->
+            <a v-if="stepFileUrl" :href="`${SERVER_ROOT_URL}${stepFileUrl}`" :download="stepFilename"
+              class="download-button">
+              Download STEP File
+            </a>
           </div>
         </div>
       </div>
     </main>
   </div>
+
+
 </template>
 
 <script setup>
@@ -55,6 +70,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue';
 import * as THREE from 'three';
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import StepViewer from './components/StepViewer.vue';
 
 const container = ref(null);
 let renderer, scene, camera, controls, animationId;
@@ -65,7 +81,12 @@ const fileId = ref(null);
 const isProcessing = ref(false);
 const progressUpdates = ref([]);
 const finalSequence = ref('');
+const stepFileUrl = ref('');      // (新)
+const stepFilename = ref('');     // (新)
+const inferenceError = ref(''); // (新)
 
+
+const SERVER_ROOT_URL = 'http://localhost:8000';
 const API_BASE_URL = 'http://localhost:8000/api';
 
 function onFileChange(event) {
@@ -83,6 +104,10 @@ function onFileChange(event) {
   const reader = new FileReader();
   reader.onload = e => loadPLY(e.target.result);
   reader.readAsArrayBuffer(selectedFile);
+
+  stepFileUrl.value = '';
+  inferenceError.value = '';
+  progressUpdates.value = [];
 }
 
 // --- Server Interaction Logic ---
@@ -109,6 +134,7 @@ function addProgressUpdate(type, data) {
 async function processOnServer() {
   isProcessing.value = true;
   progressUpdates.value = [];
+  stepFileUrl.value = '';
   finalSequence.value = '';
 
   addProgressUpdate('status', 'Uploading file to server...');
@@ -126,13 +152,25 @@ async function processOnServer() {
 
   eventSource.onmessage = (event) => {
     const message = JSON.parse(event.data);
-    addProgressUpdate(message.type, message.data);
 
-    if (message.type === 'result') {
-      finalSequence.value = message.data;
+    if (message.type === 'status') {
+      progressUpdates.value.push(message);
+    } else if (message.type === 'result') {
+      // (修改) 处理新的结果格式
+      if (message.data.status === 'success') {
+        stepFileUrl.value = message.data.url;
+        stepFilename.value = message.data.filename;
+        progressUpdates.value.push({ type: 'status', data: 'STEP file generated successfully!' });
+      } else {
+        // (功能点三) 显示转换失败的消息
+        inferenceError.value = message.data.message;
+        progressUpdates.value.push({ type: 'error', data: 'Process finished with an error.' });
+      }
       eventSource.close();
       isProcessing.value = false;
     } else if (message.type === 'error') {
+      inferenceError.value = message.data; // 显示后端脚本的通用错误
+      progressUpdates.value.push({ type: 'error', data: 'A critical error occurred on the server.' });
       eventSource.close();
       isProcessing.value = false;
     }
@@ -415,5 +453,59 @@ pre {
   to {
     transform: rotate(360deg);
   }
+}
+
+.result-viewer-box {
+  height: 480px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  position: relative;
+  /* 为了定位下载按钮 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.result-placeholder {
+  color: #888;
+  text-align: center;
+  padding: 20px;
+}
+
+.result-placeholder.error {
+  color: #d9534f;
+}
+
+.result-placeholder h4 {
+  margin-top: 0;
+}
+
+.download-button {
+  position: absolute;
+  bottom: 15px;
+  right: 15px;
+  background-color: #28a745;
+  color: white;
+  padding: 8px 15px;
+  border-radius: 5px;
+  text-decoration: none;
+  font-size: 14px;
+  z-index: 10;
+}
+
+.download-button:hover {
+  background-color: #218838;
+}
+
+.result-placeholder.error pre {
+  text-align: left;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+  padding: 10px;
+  color: #721c24;
 }
 </style>

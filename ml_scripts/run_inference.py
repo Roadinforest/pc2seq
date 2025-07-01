@@ -5,12 +5,16 @@ import sys
 # 将脚本所在的目录（ml_scripts）和其父目录（backend）添加到路径
 # 这使得相对导入和绝对导入（从deepcad_lib）都能工作
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '..'))
+PROJECT_ROOT = os.path.abspath(os.path.join(BACKEND_DIR, '..')) # 这是 pc2seq/
+
 if SCRIPT_DIR not in sys.path:
     sys.path.append(SCRIPT_DIR)
-
-BACKEND_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '..'))
 if BACKEND_DIR not in sys.path:
     sys.path.append(BACKEND_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT) # <--- 确保项目根目录在路径中
+
 # --- 路径设置结束 ---
 
 import torch
@@ -22,11 +26,14 @@ import time
 import json
 from unittest.mock import patch
 
-# 现在，这两种导入方式都应该是稳健的
-from extract_commands import get_command_sequence_string # 从同级目录导入
+
+from extract_commands import get_command_sequence_string
 from deepcad_lib.pc2cad import PointNet2
 from deepcad_lib.config.configAE import ConfigAE
 from deepcad_lib.trainer import TrainerAE
+# 在 run_inference.py 中
+from ml_scripts.converter import h5_to_step
+
 
 N_POINTS = 2048
 
@@ -97,16 +104,54 @@ def run_pipeline(ply_file_path, output_dir, pc_model_path, proj_dir, ae_exp_name
         time.sleep(1)  # 模拟耗时
 
         # --- 步骤 4: 提取命令并返回结果 ---
-        print_status("Step 4/4: Finalizing and extracting commands...")
-        result_string = get_command_sequence_string(cad_vec)
+    #     print_status("Step 4/4: Finalizing and extracting commands...")
+    #     result_string = get_command_sequence_string(cad_vec)
+    #
+    #     print_result(result_string)
+    #     print_status("Done.")
+    #
+    # except Exception as e:
+    #     import traceback
+    #     print_error(f"An error occurred during inference: {e}\n{traceback.format_exc()}")
 
-        print_result(result_string)
+        # --- 步骤 4: 保存 H5 并尝试转换为 STEP ---
+        print_status("Step 4/5: Saving intermediate H5 file...")
+
+        # base_name = os.path.splitext(os.path.basename(ply_file_path))[0]
+        # output_h5_path = os.path.join(output_dir, f"{base_name}_reconstructed.h5")
+
+
+        base_name = os.path.splitext(os.path.basename(ply_file_path))[0]
+        # output_dir 现在是一个相对路径，但因为 cwd 设置正确，所以这里的拼接是有效的
+        output_h5_path = os.path.join(output_dir, f"{base_name}_reconstructed.h5")
+
+        with h5py.File(output_h5_path, 'w') as f:
+            f.create_dataset('out_vec', data=cad_vec, dtype=np.int32)
+
+        print_status("Step 5/5: Converting to STEP format...")
+        output_step_path = os.path.join(output_dir, f"{base_name}_reconstructed.step")
+
+        try:
+            h5_to_step(output_h5_path, output_step_path)
+            # 成功！准备返回给前端的URL
+            step_file_url = f"/media/results/{os.path.basename(output_step_path)}"
+            print_result({
+                "status": "success",
+                "url": step_file_url,
+                "filename": os.path.basename(output_step_path)
+            })
+
+        except Exception as e:
+            # 转换失败！
+            print_result({
+                "status": "error",
+                "message": f"Conversion to STEP failed. Reason: {str(e)}"
+            })
+
         print_status("Done.")
 
     except Exception as e:
-        import traceback
-        print_error(f"An error occurred during inference: {e}\n{traceback.format_exc()}")
-
+        print_error(str(e))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
